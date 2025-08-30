@@ -266,7 +266,6 @@
 <body>
 
     <div class="app-container">
-        <!-- HEADER: This stays on top for all pages -->
         <div class="header">
             <h1>Smart Attendance</h1>
             <p>Offline-First Rural School System</p>
@@ -274,7 +273,6 @@
 
         <div id="sync-status">Syncing data to cloud...</div>
 
-        <!-- PAGE: DASHBOARD (Home Page) -->
         <div id="page-dashboard" class="page active">
             <div class="card">
                 <h2>Welcome, Teacher!</h2>
@@ -287,7 +285,6 @@
             <button class="btn btn-secondary" id="sync-button" onclick="syncData()">Sync Data to Cloud</button>
         </div>
 
-        <!-- PAGE: ENROLL NEW STUDENT -->
         <div id="page-enroll" class="page">
             <h2>Enroll New Student</h2>
             <div class="card">
@@ -308,7 +305,6 @@
             <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
         </div>
 
-        <!-- PAGE: TAKE ATTENDANCE -->
         <div id="page-attendance" class="page">
             <h2>Take Attendance</h2>
             <div class="card">
@@ -318,14 +314,12 @@
                     <canvas id="attendance-canvas"></canvas>
                 </div>
                 <div id="attendance-status-list" class="attendance-status-list">
-                    <!-- Student statuses will be populated here by JS -->
                 </div>
             </div>
             <button class="btn" onclick="stopAttendanceScan()">Finish and Save</button>
             <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
         </div>
 
-        <!-- PAGE: REPORTS -->
         <div id="page-reports" class="page">
             <h2>Attendance Reports</h2>
             <div class="card">
@@ -335,7 +329,6 @@
                 </div>
                 <button class="btn" onclick="generateReport()">Generate Report</button>
                 <div id="report-output">
-                    <!-- Report will be displayed here -->
                 </div>
                 <button class="btn btn-secondary" id="mid-day-meal-btn" onclick="generateMidDayMealReport()">Generate
                     Mid-Day Meal Report</button>
@@ -344,12 +337,10 @@
             <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
         </div>
 
-        <!-- PAGE: MANAGE STUDENTS (New Page) -->
         <div id="page-manage" class="page">
             <h2>Manage Students</h2>
             <div class="card">
                 <div id="student-management-list">
-                    <!-- Student list will be populated here by JS -->
                 </div>
             </div>
             <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
@@ -357,13 +348,11 @@
 
     </div>
 
-    <!-- LOADING OVERLAY -->
     <div id="loading-overlay">
         <div class="loader"></div>
         <p id="loading-text">Loading AI Models...</p>
     </div>
 
-    <!-- Third-party libraries -->
     <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.2/dist/dexie.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
@@ -473,7 +462,7 @@
         async function startCamera(videoElement) {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'user' }
+                    video: { facingMode: 'environment' } // <-- MODIFIED: Use the back camera
                 });
                 videoElement.srcObject = stream;
             } catch (err) {
