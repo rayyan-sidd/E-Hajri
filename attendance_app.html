@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline Attendance System</title>
+    <meta name="theme-color" content="#4A90E2">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        /* General Body Styling */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f9;
+            color: #333;
+            overscroll-behavior-y: contain;
+            /* Prevents pull-to-refresh */
+        }
+
+        /* App Container */
+        .app-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            min-height: 100vh;
+        }
+
+        /* Header Styling */
+        .header {
+            background-color: #4A90E2;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-bottom-left-radius: 15px;
+            border-bottom-right-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            opacity: 0.9;
+        }
+
+        /* Page Content Styling */
+        .page {
+            display: none;
+            /* Hide all pages by default */
+            padding: 20px;
+            animation: fadeIn 0.5s;
+        }
+
+        .page.active {
+            display: block;
+            /* Show active page */
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Button Styling */
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-align: center;
+            color: white;
+            background-color: #4A90E2;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn:hover {
+            background-color: #357ABD;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-secondary {
+            background-color: #777;
+        }
+
+        .btn-secondary:hover {
+            background-color: #555;
+        }
+
+        .btn-danger {
+            background-color: #D9534F;
+        }
+
+        .btn-danger:hover {
+            background-color: #C9302C;
+        }
+
+        /* Card Styling */
+        .card {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* Form Styling */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            /* Important for padding */
+        }
+
+        /* Student List Styling */
+        .student-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .student-list-item:last-child {
+            border-bottom: none;
+        }
+
+        .student-list-item button {
+            padding: 5px 10px;
+            font-size: 0.9rem;
+            width: auto;
+            margin: 0;
+        }
+
+        /* Loading Overlay */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s;
+        }
+
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #4A90E2;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+        }
+
+        #loading-text {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            color: #333;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Camera View Styling */
+        #camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            margin: 0 auto;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        video,
+        canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Attendance List during scan */
+        .attendance-status-list {
+            margin-top: 20px;
+        }
+
+        .attendance-status-item {
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background-color 0.3s;
+        }
+
+        .attendance-status-item.present {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .attendance-status-item.absent {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Sync Status Bar */
+        #sync-status {
+            background-color: #ffc107;
+            color: #333;
+            text-align: center;
+            padding: 5px;
+            font-size: 0.9rem;
+            display: none;
+            /* Hidden by default */
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app-container">
+        <!-- HEADER: This stays on top for all pages -->
+        <div class="header">
+            <h1>Smart Attendance</h1>
+            <p>Offline-First Rural School System</p>
+        </div>
+
+        <div id="sync-status">Syncing data to cloud...</div>
+
+        <!-- PAGE: DASHBOARD (Home Page) -->
+        <div id="page-dashboard" class="page active">
+            <div class="card">
+                <h2>Welcome, Teacher!</h2>
+                <p>Manage your class attendance efficiently.</p>
+            </div>
+            <button class="btn" onclick="navigateTo('enroll')">Enroll New Student</button>
+            <button class="btn" onclick="navigateTo('attendance')">Take Attendance</button>
+            <button class="btn" onclick="navigateTo('reports')">View Reports</button>
+            <button class="btn" onclick="navigateTo('manage')">Manage Students</button>
+            <button class="btn btn-secondary" id="sync-button" onclick="syncData()">Sync Data to Cloud</button>
+        </div>
+
+        <!-- PAGE: ENROLL NEW STUDENT -->
+        <div id="page-enroll" class="page">
+            <h2>Enroll New Student</h2>
+            <div class="card">
+                <div class="form-group">
+                    <label for="student-name">Student Name</label>
+                    <input type="text" id="student-name" placeholder="e.g. Priya Sharma">
+                </div>
+                <div class="form-group">
+                    <label for="roll-number">Roll Number</label>
+                    <input type="text" id="roll-number" placeholder="e.g. 25">
+                </div>
+                <p>Please take 3 clear photos of the student.</p>
+                <div id="capture-status">Photos captured: 0 of 3</div>
+                <video id="enroll-video" autoplay muted playsinline></video>
+                <canvas id="enroll-canvas" style="display:none;"></canvas>
+                <button class="btn" id="capture-btn" onclick="captureFace()">Capture Photo</button>
+            </div>
+            <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
+        </div>
+
+        <!-- PAGE: TAKE ATTENDANCE -->
+        <div id="page-attendance" class="page">
+            <h2>Take Attendance</h2>
+            <div class="card">
+                <p>Pan your camera slowly across the classroom. Students will be marked present automatically.</p>
+                <div id="camera-container">
+                    <video id="attendance-video" autoplay muted playsinline></video>
+                    <canvas id="attendance-canvas"></canvas>
+                </div>
+                <div id="attendance-status-list" class="attendance-status-list">
+                    <!-- Student statuses will be populated here by JS -->
+                </div>
+            </div>
+            <button class="btn" onclick="stopAttendanceScan()">Finish and Save</button>
+            <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
+        </div>
+
+        <!-- PAGE: REPORTS -->
+        <div id="page-reports" class="page">
+            <h2>Attendance Reports</h2>
+            <div class="card">
+                <div class="form-group">
+                    <label for="report-date">Select Date</label>
+                    <input type="date" id="report-date">
+                </div>
+                <button class="btn" onclick="generateReport()">Generate Report</button>
+                <div id="report-output">
+                    <!-- Report will be displayed here -->
+                </div>
+                <button class="btn btn-secondary" id="mid-day-meal-btn" onclick="generateMidDayMealReport()">Generate
+                    Mid-Day Meal Report</button>
+                <div id="mid-day-meal-output"></div>
+            </div>
+            <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
+        </div>
+
+        <!-- PAGE: MANAGE STUDENTS (New Page) -->
+        <div id="page-manage" class="page">
+            <h2>Manage Students</h2>
+            <div class="card">
+                <div id="student-management-list">
+                    <!-- Student list will be populated here by JS -->
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
+        </div>
+
+    </div>
+
+    <!-- LOADING OVERLAY -->
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <p id="loading-text">Loading AI Models...</p>
+    </div>
+
+    <!-- Third-party libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.2/dist/dexie.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+    <script>
+
+        // 1. SETUP & INITIALIZATION
+
+        const videoEnroll = document.getElementById('enroll-video');
+        const videoAttendance = document.getElementById('attendance-video');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+
+        let db;
+        let faceMatcher;
+        let studentData = [];
+        let attendanceInterval;
+
+        // This is a list of captured face descriptors during enrollment for one student
+        let capturedDescriptors = [];
+
+        // Run this function when the page loads
+        window.onload = async () => {
+            setupDatabase();
+            await loadFaceApiModels();
+            await loadStudentData();
+            navigateTo('dashboard'); // Start at dashboard after loading
+            hideLoading();
+            registerServiceWorker(); // For PWA offline functionality
+        };
+
+        function showLoading(text) {
+            loadingText.innerText = text;
+            loadingOverlay.style.display = 'flex';
+        }
+
+        function hideLoading() {
+            loadingOverlay.style.display = 'none';
+        }
+
+        async function loadFaceApiModels() {
+            showLoading('Loading AI Models...');
+            await faceapi.nets.tinyFaceDetector.loadFromUri('./models');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('./models');
+            await faceapi.nets.faceRecognitionNet.loadFromUri('./models');
+            console.log("AI Models Loaded");
+        }
+
+        // --- 2. DATABASE (DEXIE.JS for IndexedDB) ---
+
+        function setupDatabase() {
+            db = new Dexie("SchoolAttendanceDB");
+            db.version(1).stores({
+                students: '++id, name, &rollNumber', // Making rollNumber unique
+                faceData: '++id, studentId, descriptor',
+                attendance: '++id, [date+studentId], status' // Indexing for faster queries
+            });
+            console.log("Database Setup Complete");
+        }
+
+        async function loadStudentData() {
+            showLoading('Loading Student Data...');
+            studentData = await db.students.toArray();
+
+            faceMatcher = null; // Reset face matcher
+            const labeledFaceDescriptors = await Promise.all(
+                studentData.map(async (student) => {
+                    const descriptors = [];
+                    const faceRecords = await db.faceData.where('studentId').equals(student.id).toArray();
+                    faceRecords.forEach(record => {
+                        descriptors.push(new Float32Array(Object.values(record.descriptor)));
+                    });
+                    if (descriptors.length > 0) {
+                        return new faceapi.LabeledFaceDescriptors(student.name, descriptors);
+                    }
+                })
+            );
+
+            const validDescriptors = labeledFaceDescriptors.filter(d => d);
+
+            if (validDescriptors.length > 0) {
+                faceMatcher = new faceapi.FaceMatcher(validDescriptors, 0.5);
+                console.log("Face Matcher created for " + validDescriptors.length + " students.");
+            } else {
+                console.log("No face data found to create a Face Matcher.");
+            }
+        }
+
+        // --- 3. NAVIGATION & PAGE HANDLING ---
+
+        function navigateTo(page) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`page-${page}`).classList.add('active');
+
+            stopAllCameras();
+            if (page === 'enroll') {
+                startCamera(videoEnroll);
+                resetEnrollmentForm();
+            } else if (page === 'attendance') {
+                startAttendanceScan();
+            } else if (page === 'reports') {
+                document.getElementById('report-date').valueAsDate = new Date();
+            } else if (page === 'manage') {
+                displayStudentManagementList();
+            }
+        }
+
+        async function startCamera(videoElement) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' }
+                });
+                videoElement.srcObject = stream;
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                alert("Could not access the camera. Please check permissions.");
+            }
+        }
+
+        function stopAllCameras() {
+            [videoEnroll, videoAttendance].forEach(video => {
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+            });
+            if (attendanceInterval) {
+                clearInterval(attendanceInterval);
+            }
+        }
+
+        // --- 4. STUDENT ENROLLMENT LOGIC ---
+
+        function resetEnrollmentForm() {
+            document.getElementById('student-name').value = '';
+            document.getElementById('roll-number').value = '';
+            capturedDescriptors = [];
+            document.getElementById('capture-status').innerText = 'Photos captured: 0 of 3';
+        }
+
+        async function captureFace() {
+            if (capturedDescriptors.length >= 3) {
+                alert("You have already captured 3 photos. Please save the student.");
+                return;
+            }
+
+            const detections = await faceapi.detectSingleFace(videoEnroll, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptor();
+
+            if (detections) {
+                capturedDescriptors.push(detections.descriptor);
+                const count = capturedDescriptors.length;
+                document.getElementById('capture-status').innerText = `Photos captured: ${count} of 3`;
+                console.log(`Captured face ${count}`);
+                if (count === 3) {
+                    await saveStudent();
+                }
+            } else {
+                alert("No face detected. Please try again.");
+            }
+        }
+
+        async function saveStudent() {
+            const name = document.getElementById('student-name').value.trim();
+            const rollNumber = document.getElementById('roll-number').value.trim();
+
+            if (!name || !rollNumber || capturedDescriptors.length < 3) {
+                alert("Please fill all fields and capture 3 photos.");
+                return;
+            }
+
+            showLoading("Saving Student...");
+
+            try {
+                const existingStudent = await db.students.where('rollNumber').equals(rollNumber).first();
+                if (existingStudent) {
+                    alert(`A student with Roll Number ${rollNumber} already exists!`);
+                    hideLoading();
+                    return;
+                }
+
+                const studentId = await db.students.add({ name, rollNumber });
+
+                for (const descriptor of capturedDescriptors) {
+                    await db.faceData.add({ studentId, descriptor });
+                }
+
+                alert(`Student ${name} enrolled successfully!`);
+                await loadStudentData();
+                navigateTo('dashboard');
+
+            } catch (error) {
+                console.error("Error saving student:", error);
+                if (error.name === 'ConstraintError') {
+                    alert(`Error: A student with Roll Number ${rollNumber} already exists.`);
+                } else {
+                    alert("Failed to save student. Check console for details.");
+                }
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // --- 5. ATTENDANCE LOGIC ---
+
+        async function startAttendanceScan() {
+            await startCamera(videoAttendance);
+
+            const attendanceList = document.getElementById('attendance-status-list');
+            attendanceList.innerHTML = '';
+            studentData.forEach(student => {
+                const studentDiv = document.createElement('div');
+                studentDiv.id = `status-${student.id}`;
+                studentDiv.className = 'attendance-status-item absent';
+                studentDiv.innerHTML = `<span>${student.name}</span><span id="label-${student.id}">Absent</span>`;
+                attendanceList.appendChild(studentDiv);
+            });
+
+            const canvas = document.getElementById('attendance-canvas');
+            const displaySize = { width: videoAttendance.clientWidth, height: videoAttendance.clientHeight };
+            faceapi.matchDimensions(canvas, displaySize);
+
+            attendanceInterval = setInterval(async () => {
+                if (!faceMatcher) return;
+
+                const detections = await faceapi.detectAllFaces(videoAttendance, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
+                const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+                canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+                faceapi.draw.drawDetections(canvas, resizedDetections);
+
+                const results = resizedDetections.map(d => faceMatcher.findBestMatch(d.descriptor));
+
+                results.forEach(result => {
+                    if (result.label !== 'unknown') {
+                        const student = studentData.find(s => s.name === result.label);
+                        if (student) {
+                            markStudentPresent(student.id, student.name);
+                        }
+                    }
+                });
+            }, 1000);
+        }
+
+        function markStudentPresent(studentId, studentName) {
+            const studentDiv = document.getElementById(`status-${studentId}`);
+            if (studentDiv && !studentDiv.classList.contains('present')) {
+                studentDiv.classList.remove('absent');
+                studentDiv.classList.add('present');
+                document.getElementById(`label-${studentId}`).innerText = 'Present';
+            }
+        }
+
+        async function stopAttendanceScan() {
+            stopAllCameras();
+            showLoading("Saving Attendance...");
+
+            const today = new Date().toISOString().slice(0, 10);
+
+            const existingRecord = await db.attendance.where({ date: today }).first();
+            if (existingRecord) {
+                const overwrite = confirm("Attendance for today already exists. Do you want to overwrite it?");
+                if (!overwrite) {
+                    hideLoading();
+                    navigateTo('dashboard');
+                    return;
+                }
+                await db.attendance.where({ date: today }).delete();
+            }
+
+            const attendancePromises = [];
+            document.querySelectorAll('.attendance-status-item').forEach(item => {
+                const studentId = parseInt(item.id.split('-')[1]);
+                const status = item.classList.contains('present') ? 'Present' : 'Absent';
+
+                attendancePromises.push(
+                    db.attendance.add({ date: today, studentId, status })
+                );
+            });
+
+            await Promise.all(attendancePromises);
+            hideLoading();
+            alert("Attendance for today has been saved!");
+            navigateTo('dashboard');
+        }
+
+        // --- 6. REPORTS & MANAGEMENT LOGIC ---
+
+        async function generateReport() {
+            const date = document.getElementById('report-date').value;
+            if (!date) {
+                alert("Please select a date.");
+                return;
+            }
+
+            const records = await db.attendance.where('date').equals(date).toArray();
+            const reportOutput = document.getElementById('report-output');
+            reportOutput.innerHTML = '';
+
+            if (records.length === 0) {
+                reportOutput.innerHTML = `<p>No attendance records found for ${date}.</p>`;
+                return;
+            }
+
+            let html = `<h4>Report for ${date}</h4><ul>`;
+            for (const record of records) {
+                const student = studentData.find(s => s.id === record.studentId);
+                if (student) {
+                    html += `<li>${student.name} (Roll: ${student.rollNumber}) - <strong>${record.status}</strong></li>`;
+                }
+            }
+            html += '</ul>';
+            reportOutput.innerHTML = html;
+        }
+
+        async function generateMidDayMealReport() {
+            const date = document.getElementById('report-date').value;
+            if (!date) {
+                alert("Please select a date to generate the meal report.");
+                return;
+            }
+            const presentCount = await db.attendance.where({ date: date, status: 'Present' }).count();
+            const outputDiv = document.getElementById('mid-day-meal-output');
+            outputDiv.innerHTML = `<p class="card"><strong>Mid-Day Meal Report for ${date}:</strong><br> Total students present: <strong>${presentCount}</strong></p>`;
+        }
+
+        async function displayStudentManagementList() {
+            const listContainer = document.getElementById('student-management-list');
+            listContainer.innerHTML = ''; // Clear previous list
+            const allStudents = await db.students.toArray();
+
+            if (allStudents.length === 0) {
+                listContainer.innerHTML = '<p>No students enrolled yet.</p>';
+                return;
+            }
+
+            allStudents.forEach(student => {
+                const item = document.createElement('div');
+                item.className = 'student-list-item';
+                item.innerHTML = `
+                    <span>${student.name} (Roll: ${student.rollNumber})</span>
+                    <button class="btn btn-danger" onclick="removeStudent(${student.id}, '${student.name}')">Remove</button>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        async function removeStudent(studentId, studentName) {
+            const confirmation = confirm(`Are you sure you want to remove ${studentName}? All their attendance data will be deleted permanently.`);
+            if (!confirmation) {
+                return;
+            }
+
+            showLoading(`Removing ${studentName}...`);
+            try {
+                // Use a transaction to ensure all related data is removed together
+                await db.transaction('rw', db.students, db.faceData, db.attendance, async () => {
+                    await db.faceData.where('studentId').equals(studentId).delete();
+                    await db.attendance.where('studentId').equals(studentId).delete();
+                    await db.students.delete(studentId);
+                });
+
+                // Refresh data and UI
+                await loadStudentData();
+                await displayStudentManagementList(); // Refresh the list on the current page
+                alert(`${studentName} has been removed successfully.`);
+
+            } catch (error) {
+                console.error(`Failed to remove student:`, error);
+                alert(`Error removing student. See console for details.`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // --- 7. PWA & SYNC LOGIC ---
+
+        function registerServiceWorker() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => console.log('Service Worker registered with scope:', registration.scope))
+                    .catch(error => console.log('Service Worker registration failed:', error));
+            }
+        }
+
+        async function syncData() {
+            document.getElementById('sync-status').style.display = 'block';
+            showLoading("Syncing with cloud...");
+
+            setTimeout(() => {
+                document.getElementById('sync-status').style.display = 'none';
+                hideLoading();
+                alert("Data synced successfully (simulation)!");
+            }, 2000);
+        }
+
+    </script>
+</body>
+
+</html>
