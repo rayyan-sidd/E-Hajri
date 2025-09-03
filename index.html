@@ -364,7 +364,7 @@
         let db, faceMatcher, attendanceInterval;
         let studentData = [];
         let capturedDescriptors = [];
-        let currentFacingMode = 'environment'; // Default to back camera
+        let currentFacingMode = 'environment';
 
         window.onload = async () => {
             setupDatabase();
@@ -397,12 +397,15 @@
 
         function setupDatabase() {
             db = new Dexie("SchoolAttendanceDB");
-            db.version(1).stores({
+            // --- FIX: The database schema has been upgraded to version 2 ---
+            // This is the key change to fix the error.
+            db.version(2).stores({
                 students: '++id, name, &rollNumber',
                 faceData: '++id, studentId',
-                attendance: '++id, [date+studentId], status'
+                // --- ADDED studentId as a standalone index for faster lookups ---
+                attendance: '++id, [date+studentId], status, studentId'
             });
-            console.log("Database Setup Complete");
+            // Dexie automatically handles the upgrade for users who have version 1.
         }
 
         async function loadStudentData() {
@@ -419,7 +422,6 @@
             );
             const validDescriptors = labeledFaceDescriptors.filter(d => d);
             faceMatcher = validDescriptors.length > 0 ? new faceapi.FaceMatcher(validDescriptors, 0.5) : null;
-            console.log(`Face Matcher ready for ${validDescriptors.length} students.`);
         }
 
         function navigateTo(page) {
@@ -437,8 +439,7 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: currentFacingMode } });
                 videoElement.srcObject = stream;
             } catch (err) {
-                console.error("Camera Error:", err);
-                alert("Could not access camera. Please check permissions and try again.");
+                alert("Could not access camera. Please check permissions.");
             }
         }
 
@@ -452,7 +453,6 @@
             clearInterval(attendanceInterval);
         }
 
-        // --- FLIP CAMERA LOGIC ---
         async function checkCameraCapabilities() {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
@@ -464,9 +464,7 @@
 
         async function flipCamera() {
             currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            stopAllCameras(); // Stop the current stream
-
-            // Restart the camera for the currently active page
+            stopAllCameras();
             if (document.getElementById('page-enroll').classList.contains('active')) {
                 await startCamera(videoEnroll);
             } else if (document.getElementById('page-attendance').classList.contains('active')) {
@@ -474,7 +472,6 @@
             }
         }
 
-        // --- STUDENT ENROLLMENT ---
         function resetEnrollmentForm() {
             document.getElementById('student-name').value = '';
             document.getElementById('roll-number').value = '';
@@ -495,13 +492,14 @@
         async function saveStudent() {
             const name = document.getElementById('student-name').value.trim();
             const rollNumber = document.getElementById('roll-number').value.trim();
-            if (!name || !rollNumber) return alert("Please fill all fields.");
+            if (!name || !rollNumber || capturedDescriptors.length < 3) return alert("Please fill all fields and capture 3 photos.");
 
             showLoading("Saving Student...");
             try {
                 await db.transaction('rw', db.students, db.faceData, async () => {
-                    const existing = await db.students.where('rollNumber').equals(rollNumber).first();
-                    if (existing) throw new Error(`Student with Roll No ${rollNumber} already exists.`);
+                    if (await db.students.where('rollNumber').equals(rollNumber).first()) {
+                        throw new Error(`Student with Roll No ${rollNumber} already exists.`);
+                    }
                     const studentId = await db.students.add({ name, rollNumber });
                     await db.faceData.bulkAdd(capturedDescriptors.map(d => ({ studentId, descriptor: d })));
                 });
@@ -513,7 +511,6 @@
             } finally { hideLoading(); }
         }
 
-        // --- ATTENDANCE LOGIC ---
         async function startAttendanceScan() {
             const attendanceList = document.getElementById('attendance-status-list');
             attendanceList.innerHTML = '';
@@ -524,10 +521,10 @@
                 studentDiv.innerHTML = `<span>${student.name}</span><span id="label-${student.id}">Absent</span>`;
                 attendanceList.appendChild(studentDiv);
             });
-            await startCamera(videoAttendance); // Wait for camera to start before setting up canvas
+            await startCamera(videoAttendance);
             const canvas = document.getElementById('attendance-canvas');
             attendanceInterval = setInterval(async () => {
-                if (!faceMatcher || videoAttendance.readyState < 2) return;
+                if (!faceMatcher || !videoAttendance.srcObject || videoAttendance.readyState < 2) return;
                 const displaySize = { width: videoAttendance.clientWidth, height: videoAttendance.clientHeight };
                 faceapi.matchDimensions(canvas, displaySize);
                 const detections = await faceapi.detectAllFaces(videoAttendance, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks().withFaceDescriptors();
@@ -574,7 +571,6 @@
             finally { hideLoading(); }
         }
 
-        // --- REPORTS & MANAGEMENT ---
         async function generateReport() {
             const date = document.getElementById('report-date').value;
             if (!date) return alert("Please select a date.");
@@ -596,11 +592,10 @@
             document.getElementById('mid-day-meal-output').innerHTML = `<p class="card"><strong>Meal Report for ${date}:</strong><br> Total present: <strong>${count}</strong></p>`;
         }
 
-        // --- FIX: This is the robust method for creating the student list ---
         async function displayStudentManagementList() {
             const listContainer = document.getElementById('student-management-list');
             listContainer.innerHTML = '';
-            const allStudents = await db.students.toArray();
+            const allStudents = await db.students.orderBy('name').toArray();
             if (allStudents.length === 0) {
                 listContainer.innerHTML = '<p>No students enrolled yet.</p>';
                 return;
@@ -608,13 +603,16 @@
             allStudents.forEach(student => {
                 const item = document.createElement('div');
                 item.className = 'student-list-item';
+                item.id = `student-item-${student.id}`;
+
                 const info = document.createElement('span');
                 info.textContent = `${student.name} (Roll: ${student.rollNumber})`;
+
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'btn btn-danger';
                 removeBtn.textContent = 'Remove';
-                // Using addEventListener is the key fix that works everywhere
                 removeBtn.addEventListener('click', () => removeStudent(student.id, student.name));
+
                 item.append(info, removeBtn);
                 listContainer.appendChild(item);
             });
@@ -627,18 +625,28 @@
                 await db.transaction('rw', db.students, db.faceData, db.attendance, async () => {
                     await db.faceData.where({ studentId }).delete();
                     await db.attendance.where({ studentId }).delete();
-                    await db.students.where({ studentId }).delete(studentId);
+                    await db.students.delete(studentId);
                 });
+
+                const itemToRemove = document.getElementById(`student-item-${studentId}`);
+                if (itemToRemove) itemToRemove.remove();
+
+                const listContainer = document.getElementById('student-management-list');
+                if (listContainer.children.length === 0) {
+                    listContainer.innerHTML = '<p>No students enrolled yet.</p>';
+                }
+
                 alert(`${studentName} removed successfully.`);
-                await loadStudentData(); // Reload student data for face matcher
-                await displayStudentManagementList(); // Re-render the list on the page
+                await loadStudentData(); // Reload AI data in the background
+
             } catch (error) {
                 console.error(`Failed to remove student:`, error);
                 alert(`Error removing student. See console for details.`);
-            } finally { hideLoading(); }
+            } finally {
+                hideLoading();
+            }
         }
 
-        // --- PWA SERVICE WORKER ---
         function registerServiceWorker() {
             if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('sw.js')
