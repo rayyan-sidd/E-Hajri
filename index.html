@@ -627,7 +627,7 @@
                 await db.transaction('rw', db.students, db.faceData, db.attendance, async () => {
                     await db.faceData.where({ studentId }).delete();
                     await db.attendance.where({ studentId }).delete();
-                    await db.students.delete(studentId);
+                    await db.students.where({ studentId }).delete(studentId);
                 });
                 alert(`${studentName} removed successfully.`);
                 await loadStudentData(); // Reload student data for face matcher
