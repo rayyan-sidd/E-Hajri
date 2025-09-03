@@ -226,6 +226,13 @@
             left: 0;
         }
 
+        /* NEW: Flip Camera Button Styling */
+        .flip-camera-btn {
+            display: none;
+            /* Hidden by default, shown by JS if multiple cameras exist */
+        }
+
+
         /* Attendance List during scan */
         .attendance-status-list {
             margin-top: 20px;
@@ -268,7 +275,7 @@
 
     <div class="app-container">
         <div class="header">
-            <h1>Smart Attendance</h1>
+            <h1>E-Hazri</h1>
             <p>Offline-First Rural School System</p>
         </div>
 
@@ -301,6 +308,7 @@
                 <div id="capture-status">Photos captured: 0 of 3</div>
                 <video id="enroll-video" autoplay muted playsinline></video>
                 <canvas id="enroll-canvas" style="display:none;"></canvas>
+                <button class="btn btn-secondary flip-camera-btn" onclick="flipCamera()">Flip Camera</button>
                 <button class="btn" id="capture-btn" onclick="captureFace()">Capture Photo</button>
             </div>
             <button class="btn btn-secondary" onclick="navigateTo('dashboard')">Back to Dashboard</button>
@@ -314,6 +322,7 @@
                     <video id="attendance-video" autoplay muted playsinline></video>
                     <canvas id="attendance-canvas"></canvas>
                 </div>
+                <button class="btn btn-secondary flip-camera-btn" onclick="flipCamera()">Flip Camera</button>
                 <div id="attendance-status-list" class="attendance-status-list">
                 </div>
             </div>
@@ -370,15 +379,17 @@
         let faceMatcher;
         let studentData = [];
         let attendanceInterval;
-
-        // This is a list of captured face descriptors during enrollment for one student
         let capturedDescriptors = [];
+
+        // --- NEW: Camera state management ---
+        let currentFacingMode = 'environment'; // Default to back camera
 
         // Run this function when the page loads
         window.onload = async () => {
             setupDatabase();
             await loadFaceApiModels();
             await loadStudentData();
+            checkCameraCapabilities(); // NEW: Check for multiple cameras
             navigateTo('dashboard'); // Start at dashboard after loading
             hideLoading();
             registerServiceWorker(); // For PWA offline functionality
@@ -462,8 +473,9 @@
 
         async function startCamera(videoElement) {
             try {
+                // --- MODIFIED: Uses the currentFacingMode variable ---
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment' } // <-- MODIFIED: Use the back camera
+                    video: { facingMode: currentFacingMode }
                 });
                 videoElement.srcObject = stream;
             } catch (err) {
@@ -483,6 +495,38 @@
                 clearInterval(attendanceInterval);
             }
         }
+
+        // --- NEW: Flip Camera Logic ---
+        async function checkCameraCapabilities() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                if (videoDevices.length > 1) {
+                    // If more than one camera, show the flip buttons
+                    document.querySelectorAll('.flip-camera-btn').forEach(btn => {
+                        btn.style.display = 'block';
+                    });
+                }
+            } catch (error) {
+                console.error("Could not enumerate devices:", error);
+            }
+        }
+
+        async function flipCamera() {
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            console.log("Switching camera to:", currentFacingMode);
+
+            // Restart the camera that is currently active on the page
+            if (document.getElementById('page-enroll').classList.contains('active')) {
+                stopAllCameras();
+                await startCamera(videoEnroll);
+            } else if (document.getElementById('page-attendance').classList.contains('active')) {
+                // For attendance, we need to restart the whole scan process
+                stopAllCameras();
+                await startAttendanceScan();
+            }
+        }
+
 
         // --- 4. STUDENT ENROLLMENT LOGIC ---
 
@@ -678,6 +722,7 @@
             outputDiv.innerHTML = `<p class="card"><strong>Mid-Day Meal Report for ${date}:</strong><br> Total students present: <strong>${presentCount}</strong></p>`;
         }
 
+        // --- FIX: Rewritten to be more robust and prevent errors ---
         async function displayStudentManagementList() {
             const listContainer = document.getElementById('student-management-list');
             listContainer.innerHTML = ''; // Clear previous list
@@ -691,13 +736,24 @@
             allStudents.forEach(student => {
                 const item = document.createElement('div');
                 item.className = 'student-list-item';
-                item.innerHTML = `
-                    <span>${student.name} (Roll: ${student.rollNumber})</span>
-                    <button class="btn btn-danger" onclick="removeStudent(${student.id}, '${student.name}')">Remove</button>
-                `;
+
+                const studentInfo = document.createElement('span');
+                studentInfo.textContent = `${student.name} (Roll: ${student.rollNumber})`;
+
+                const removeButton = document.createElement('button');
+                removeButton.className = 'btn btn-danger';
+                removeButton.textContent = 'Remove';
+                // Use addEventListener instead of inline onclick to avoid string parsing errors
+                removeButton.addEventListener('click', () => {
+                    removeStudent(student.id, student.name);
+                });
+
+                item.appendChild(studentInfo);
+                item.appendChild(removeButton);
                 listContainer.appendChild(item);
             });
         }
+
 
         async function removeStudent(studentId, studentName) {
             const confirmation = confirm(`Are you sure you want to remove ${studentName}? All their attendance data will be deleted permanently.`);
